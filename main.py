@@ -5,8 +5,9 @@
 # Module imports
 #import pygame
 #import random
-from core_algorithms import generate_maze 
+import core_classes as cc
 
-maze = generate_maze(51,51)
-for i in maze:
-    print(i)
+maze1 = cc.Maze()
+maze1.generate_maze("maze1", 51, 51)
+
+print(maze1.maze)
