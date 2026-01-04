@@ -3,11 +3,11 @@
 # --------------------
 
 # Module imports
-#import pygame
-#import random
 import core_classes as cc
 
 maze1 = cc.Maze()
-maze1.generate_maze("maze1", 51, 51)
+maze1.generate_maze("maze1", 129, 73)
+#maze1.terminal_output()
 
-print(maze1.maze)
+game1 = cc.Game(maze1)
+game1.run()

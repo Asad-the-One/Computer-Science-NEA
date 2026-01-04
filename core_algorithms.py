@@ -15,7 +15,7 @@
 import random
 
 # Function beginning
-def generate_maze(num_rows, num_cols, knock_prob=0.1):
+def generate_maze(num_cols, num_rows, knock_prob=0.1):
 
     # If num_rows or num_cols is even, make it odd.
     num_rows = (num_rows//2) * 2 + 1 + 2
@@ -117,7 +117,19 @@ def generate_maze(num_rows, num_cols, knock_prob=0.1):
             maze[0][i] = 0
         if maze[-2][i] == 0 and maze[-3][i] == 0:
             maze[-1][i] = 0
-
-
     
+    # Add a border of path cells.
+    for iteration in range(2):
+        
+        # Add columns on either side
+        for i in range(len(maze)):
+        
+            maze[i].insert(0, 0)
+            maze[i].append(0)
+    
+        # Add rows on the top and bottom
+        maze.insert(0, [0 for i in range(len(maze[0]))])
+        maze.append([0 for i in range(len(maze[0]))])
+
+
     return maze
