@@ -92,14 +92,23 @@ class Maze:
 
 # Player class
 
-class Player:
+class Player(pygame.sprite.Sprite):
     
     # Initialise attributes.
-    def __init__(self, pos, screen_pos, direction="u", inventory=[], keybinds={}, echo_cool=0, speed_buff=False, health=10, max_health=10, speed=5):
+    def __init__(self, pos, tile_size, screen_pos=[640,360], inventory=[], keybinds={}, echo_cool=0, speed_buff=False, health=10, max_health=10, speed=5):
+        super().__init__()
+        self.image = pygame.Surface((tile_size, tile_size), pygame.SRCALPHA)
+        pygame.draw.circle(self.image, (32, 144, 255), (tile_size//2, tile_size//2), tile_size//2)
+        self.rect = self.image.get_rect(topleft=(pos[0], pos[1]))
 
         self.pos = pos
-        self.screen_pos = screen_pos
-        self.direction = direction
+        self.screen_pos = screen_pos        
+        self.direction = {
+            "u": False,
+            "d": False,
+            "l": False,
+            "r": False
+        }
         self.inventory = inventory
         self.keybinds = keybinds
         self.echo_cool = echo_cool
@@ -107,22 +116,58 @@ class Player:
         self.health = health
         self.max_health = max_health
         self.speed = speed
+    
+    # Echolocation
+    def echolocation(self): # Will add attributes in a future sprint
+        # Reveal tiles ahead
+        self.echo_cool = 20
+    
+    # Move the player
+    def move_player(self):
+
+        dx = dy = 0
+        
+        # Update player position
+        if self.direction["u"]:
+            dy = -self.speed
+        if self.direction["d"]:
+            dy = self.speed
+        if self.direction["l"]:
+            dx = -self.speed
+        if self.direction["r"]:
+            dx = self.speed
+        
+        # Clear differences if conflicts
+        if self.direction["u"] and self.direction["d"]:
+            dy = 0
+        if self.direction["r"] and self.direction["l"]:
+            dx = 0
+        
+        self.pos[0] += dx
+        self.pos[1] += dy
+        self.rect.x = self.pos[0]
+        self.rect.y = self.pos[1]
 
 #####################
 
 # Enemy class
 # Types of enemy will inherit from this base class if they have special abilities, which I may implement near the end of development if I have time.
 
-class Enemy:
+class Enemy(pygame.sprite.Sprite):
 
     # Initialise attributes.
-    def __init__(self, position, attack=2, speed=2, sense_strength=(0.1,0.1), loot=[]):
-        self.position = position
+    def __init__(self, pos, tile_size, attack=2, speed=2, sense_strength=(0.1,0.1), loot=[]):
+        super().__init__()
+        self.pos = pos
         self.attack = attack
         self.speed = speed
         self.sense_strength = sense_strength
         self.loot = loot
         self.path = []
+
+        self.image = pygame.Surface((tile_size, tile_size), pygame.SRCALPHA)
+        pygame.draw.circle(self.image, (255, 0, 0), (tile_size//2, tile_size//2), tile_size//2)
+        self.rect = self.image.get_rect(topleft=(int(pos[0]), int(pos[1])))
     
     # Deal damage
     def deal_damage(self, player):
@@ -145,13 +190,17 @@ class Enemy:
 
 # Chest class
 
-class Chest:
+class Chest(pygame.sprite.Sprite):
 
     # Initialise object
-    def __init__(self, loot=[]):
-
+    def __init__(self, pos, tile_size, loot=[]):
+        super().__init__()
         self.loot = loot
-        self.position = []
+        self.pos = pos
+
+        self.image = pygame.Surface((tile_size, tile_size), pygame.SRCALPHA)
+        pygame.draw.circle(self.image, (255, 255, 0), (tile_size//2, tile_size//2), tile_size//2)
+        self.rect = self.image.get_rect(topleft=(self.pos[0], self.pos[1]))
 
     # Open chest
     def open_chest(self):
@@ -161,35 +210,47 @@ class Chest:
 
 #####################
 
+# Tile class
+
+class Wall(pygame.sprite.Sprite):
+
+    # Iniitalise object with parent object's attributes and methods alongside a boolean for being a wall or path.
+    def __init__(self, row, col, tile_size):
+
+        super().__init__()
+        self.row = row
+        self.col = col
+        self.image = pygame.Surface((tile_size, tile_size))
+        self.image.fill((0, 0, 0))
+        self.rect = self.image.get_rect(topleft=(int(col)*tile_size, int(row)*tile_size))
+
+#####################
+
 # Game class
 
 class Game:
 
     # Initialise object.
-    def __init__(self, maze, chests=[], enemies=[], window_width=1280, window_height=720):
+    def __init__(self, maze, scale=2, window_width=1280, window_height=720):
         
         self.maze = maze.maze
-        self.enemies = enemies
-        self.chests = chests
+        self.scale = scale
         self.running = True
         pygame.init()
         self.clock = pygame.time.Clock()
-        self.spawn_enemies(100)
-        self.spawn_chests(50)
+        self.tile_size = 20
+        
+        self.walls = pygame.sprite.Group()
+        self.chests = pygame.sprite.Group()
+        self.enemies = pygame.sprite.Group()
         
         # Give the window the name "Sonar's Edge".
         pygame.display.set_caption("Sonar's Edge")
+
+        self.spawn_enemies(100)
+        self.spawn_chests(50)
         
-        # Create maze tile sizes based on the size of the window.
-        # If height < width
-        if len(maze.maze) < len(maze.maze["0"]):
-            # Tile size based on width
-            self.tile_size = window_width//len(maze.maze["0"])
-        else:
-            # Tile size based on height
-            self.tile_size = window_height//len(maze.maze)
-        
-        self.screen = pygame.display.set_mode((len(maze.maze["0"])*self.tile_size, len(maze.maze)*self.tile_size))
+        self.screen = pygame.display.set_mode((window_width, window_height), pygame.FULLSCREEN|pygame.SCALED)
 
 
     # Handle running the game
@@ -197,27 +258,9 @@ class Game:
         
         # Make game run at 60fps
         tick = self.clock.tick(60) / 1000
-        
-        
-        # Run the game
-        while self.running:            
-    
-            # Draw the maze
-            self.draw_maze()
- 
-            # Quit if the user wants to quit
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.running = False
-            
-            # Update screen
-            pygame.display.flip()
-            
-            # Handle player movement
-    
-    # Draw the maze
-    def draw_maze(self):
-        self.screen.fill((75, 75, 75))
+        self.player = Player([1,1], tile_size=self.tile_size, speed=0.5)
+
+        # Add tiles to the tile list
         y = 0
         for row in self.maze:
             x = 0
@@ -226,26 +269,76 @@ class Game:
                 cell = self.maze[row][col]
 
                 if cell["wall"]:
-                    rect = pygame.Rect(x, y, self.tile_size, self.tile_size)
-                    pygame.draw.rect(self.screen, (0, 0, 0), rect)
+                    self.walls.add(Wall(row, col, self.tile_size*self.scale))
 
                 x += self.tile_size
 
             y += self.tile_size
         
-        # Add enemy tiles
-        for enemy in self.enemies:
+        # Run the game
+        while self.running:            
+    
+            # Draw the maze
+            self.draw_maze()
+ 
+            # Process pygame events
+            for event in pygame.event.get():
 
-            render_row = enemy.position[0] * self.tile_size + self.tile_size//2
-            render_column = enemy.position[1] * self.tile_size + self.tile_size//2
-            pygame.draw.circle(self.screen, (255, 0, 0), (render_column, render_row), self.tile_size//2)
-        
-        # Add chest tiles
-        for chest in self.chests:
+                # Quit if the user wants to quit
+                if event.type == pygame.QUIT:
+                    self.running = False
+                
+                # Process key presses. Will implement keybinds later. For now, just WASD.
+                if event.type == pygame.KEYDOWN:
 
-            render_row = chest.position[0] * self.tile_size + self.tile_size//2
-            render_column = chest.position[1] * self.tile_size + self.tile_size//2
-            pygame.draw.circle(self.screen, (255, 255, 0), (render_column, render_row), self.tile_size//2)
+                    # W
+                    if event.key == pygame.K_w:
+                        self.player.direction["u"] = True
+                    # A
+                    if event.key == pygame.K_a:
+                        self.player.direction["l"] = True                    
+                    # S
+                    if event.key == pygame.K_s:
+                        self.player.direction["d"] = True                    
+                    # D
+                    if event.key == pygame.K_d:
+                        self.player.direction["r"] = True
+                
+                # Process key lifts. Will implement keybinds later. For now, just WASD.
+                if event.type == pygame.KEYUP:
+
+                    # W
+                    if event.key == pygame.K_w:
+                        self.player.direction["u"] = False
+                    # A
+                    if event.key == pygame.K_a:
+                        self.player.direction["l"] = False                    
+                    # S
+                    if event.key == pygame.K_s:
+                        self.player.direction["d"] = False                    
+                    # D
+                    if event.key == pygame.K_d:
+                        self.player.direction["r"] = False
+            
+            # Update screen
+            pygame.display.flip()
+            
+            # Handle player movement
+            self.player.move_player()
+    
+    # Draw the maze
+    def draw_maze(self):
+
+        # Give the screen a grey background
+        self.screen.fill((75, 75, 75))
+
+        # Draw walls, chests and enemies
+        self.walls.draw(self.screen)
+        self.chests.draw(self.screen)
+        self.enemies.draw(self.screen)
+
+        # Draw the player
+        self.screen.blit(self.player.image, self.player.rect)
 
         pygame.display.update()
     
@@ -265,7 +358,8 @@ class Game:
             # Add an enemy if the cell is a path cell
             if not self.maze[row][column]["wall"]:
                 count -= 1
-                self.enemies.append(Enemy(position=[int(row), int(column)]))
+                x, y = int(column)*self.tile_size*self.scale + self.tile_size*self.scale//4, int(row)*self.tile_size*self.scale + self.tile_size*self.scale//4
+                self.enemies.add(Enemy(tile_size=self.tile_size, pos=[x, y]))
     
     # Spawn chests randomly around path cells
     def spawn_chests(self, count):
@@ -283,4 +377,5 @@ class Game:
             # Add a chest if the cell is a path cell
             if not self.maze[row][column]["wall"]:
                 count -= 1
-                self.chests.append(Enemy(position=[int(row), int(column)]))
+                x, y = int(column)*self.tile_size*self.scale + self.tile_size*self.scale//4, int(row)*self.tile_size*self.scale + self.tile_size*self.scale//4
+                self.chests.add(Chest(tile_size=self.tile_size, pos=[x, y]))
