@@ -55,6 +55,7 @@ def generate_maze(num_cols, num_rows, knock_prob=0.1):
 
     # MAIN: Maze generation begins
     done = False
+    count = 0
     while len(frontier_cells) != 0:
         
         # Pop a random frontier.
@@ -67,6 +68,8 @@ def generate_maze(num_cols, num_rows, knock_prob=0.1):
             # Carve to the frontier.
             maze[nrow][ncol] = 0
             maze[(nrow + row)//2][(ncol + col)//2] = 0
+            count += 3
+            print(f"Progress: {(1000*(2*count/(num_cols*num_rows))*0.6667//1)/10}")
 
             # Add new frontier cells.
             add_frontiers(maze, directions, [nrow, ncol], frontier_cells)
