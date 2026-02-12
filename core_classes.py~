@@ -7,17 +7,11 @@
 
 # Module imports
 import json
-import core_algorithms as ca
+import core_algorithms
 import os
 import pygame
 import random
 import math
-
-#####################
-
-#################
-# Main Game Classes
-#################
 
 #####################
 
@@ -40,7 +34,7 @@ class Maze:
     def generate_maze(self, file_name, num_rows, num_cols):
         
         # Generate the maze.
-        maze = ca.generate_maze(num_rows, num_cols)
+        maze = core_algorithms.generate_maze(num_rows, num_cols)
         
         # Convert it into JSON format.
         dict_maze = {}
@@ -129,7 +123,7 @@ class Player(pygame.sprite.Sprite):
 class Enemy(pygame.sprite.Sprite):
 
     # Initialise attributes.
-    def __init__(self, pos, rect, attack=2, speed=0.05, sense_strength=(0.1,0.1), loot=[]):
+    def __init__(self, pos, rect, attack=2, speed=2, sense_strength=(0.1,0.1), loot=[]):
         super().__init__()
         self.pos = pos
         self.attack = attack
@@ -154,24 +148,8 @@ class Enemy(pygame.sprite.Sprite):
         pass
 
     # Update enemy position
-    def update_position(self, maze, target):
-        
+    def update_position(self):
         # Use self.path and self.speed to move the enemy if necessary
-        temp_path = ca.astar(maze, [self.pos[0]//1, self.pos[1]//1], [target[0]//1, target[1]//1])
-        current = temp_path[-1]
-        print(current)
-        trace = []
-        while current.pos != self.pos:
-            trace.append(current)
-            for i in temp_path:
-                if i.pos == current.parent_coords:
-                    current = i
-                    break
-        
-        # Reverse the path so it's enemy to player rather than player to enemy
-        self.path = trace[::-1]
-
-        # Move the enemy
         pass
 
 #####################
@@ -246,13 +224,14 @@ class Camera:
 class Game:
 
     # Initialise object.
-    def __init__(self, screen, maze, tile_size=50):
+    def __init__(self, maze, tile_size=50, window_width=1280, window_height=720):
         
         self.maze = maze.maze
         self.running = True
+        pygame.init()
 
         self.clock = pygame.time.Clock()
-        self.clock.tick(120)
+        self.clock.tick(1)
         self.camera = Camera(tile_size)
 
         self.direction = {
@@ -261,7 +240,7 @@ class Game:
             "l": False,
             "r": False
         }
-        self.screen_dimensions = pygame.display.get_window_size()
+        self.screen_dimensions = [window_width, window_height]
         
         self.walls = pygame.sprite.Group()
         self.chests = pygame.sprite.Group()
@@ -271,12 +250,10 @@ class Game:
         # Give the window the name "Sonar's Edge".
         pygame.display.set_caption("Sonar's Edge")
 
-        self.spawn_enemies(1)
+        self.spawn_enemies(100)
         self.spawn_chests(50)
         
-        #self.screen = pygame.display.set_mode(self.screen_dimensions, pygame.FULLSCREEN|pygame.SCALED)
-        self.screen = screen
-        self.path = []
+        self.screen = pygame.display.set_mode((window_width, window_height), pygame.FULLSCREEN|pygame.SCALED)
 
 
     # Handle running the game
@@ -337,15 +314,7 @@ class Game:
                     # D
                     if event.key == pygame.K_d:
                         self.direction["r"] = True
-
-                    # K (DEBUGGING) Get enemy path and render it
-                    if event.key == pygame.K_k:
-                        for enemy in self.enemies:
-
-                            # Use A* algorithm to pathfind to player
-                            enemy.update_position(self.maze, [self.player.pos[0]//1,self.player.pos[1]//1])
-                            self.path = enemy.path
-
+                
                 # Process key lifts. Will implement keybinds later. For now, just WASD.
                 if event.type == pygame.KEYUP:
 
@@ -393,10 +362,10 @@ class Game:
                 x, y = float(column), float(row)
                 self.enemies.add(Enemy([x, y], rect))
 
-                #rect.x = (x-self.camera.pos[0]) * self.camera.tile_size
-                #rect.y = (y-self.camera.pos[1]) * self.camera.tile_size
-                #rect.center = (rect.x, rect.y)
-                #self.walls.add(Wall([x, y], rect))
+                rect.x = (x-self.camera.pos[0]) * self.camera.tile_size
+                rect.y = (y-self.camera.pos[1]) * self.camera.tile_size
+                rect.center = (rect.x, rect.y)
+                self.walls.add(Wall([x, y], rect))
     
     # Spawn chests randomly around path cells
     def spawn_chests(self, count):
@@ -429,7 +398,7 @@ class Game:
     # Determine dx and dy, then apply it to the player on each game tick.
     def draw_maze(self):
 
-        self.screen.fill((75,75,75))        
+        self.screen.fill((75,75,75))
 
         dx = dy = 0
         
@@ -475,18 +444,6 @@ class Game:
         self.check_sprite_collisions = pygame.sprite.Group()
 
         # Move the rest of the sprites
-
-        # Render green squares on the map
-        for cell in self.path:
-
-            rect = pygame.Rect(
-                (cell.pos[0]-cam_x+x_offset)*tile_size,
-                (cell.pos[1]-cam_y+y_offset)*tile_size,
-                tile_size,
-                tile_size
-            )
-            cell.rect = rect
-            pygame.draw.rect(self.screen, (0,255,0), rect)
         
         for wall in self.walls:
             
@@ -501,7 +458,7 @@ class Game:
 
             # Check if in screen bounds
             if 0 < rect.x < self.screen_dimensions[1] and 0 < rect.y < self.screen_dimensions[1]:
-                self.check_sprite_collisions.add(wall)
+                self.check_sprite_collisions.add(wall)        
 
         # Render player
         length = self.camera.tile_size/3
@@ -516,44 +473,6 @@ class Game:
         
         #pygame.draw.rect(self.screen, (255,255,255), rect)
         pygame.draw.circle(self.screen, (0,0,255), (self.player.rect.x+length/2, self.player.rect.y+length/2), length/2 - length*self.player.speed/2)
-
-        # Render enemies
-        for enemy in self.enemies:
-
-            # Move enemy if a path exists for it
-            if enemy.path:
-                
-                # Target the first tile in the list
-                target = enemy.path[0].pos
-                
-                # Calculate distance to target
-                dx = target[0] - enemy.pos[0]
-                dy = target[1] - enemy.pos[1]
-                
-                # Euclidean distance
-                distance = (dx**2 + dy**2)**0.5
-
-                # Check if the enemy is within one speed step
-                if distance <= enemy.speed:
-
-                    # Snap to exact tile position and remove it from the path
-                    enemy.pos[0], enemy.pos[1] = target
-                    enemy.path.pop(0)
-
-                else:
-
-                    # Normalize the movement (move exactly 'speed' amount toward target)
-                    enemy.pos[0] += (dx / distance) * enemy.speed
-                    enemy.pos[1] += (dy / distance) * enemy.speed
-
-            rect = pygame.Rect(
-                (enemy.pos[0]-cam_x+x_offset)*tile_size,
-                (enemy.pos[1]-cam_y+y_offset)*tile_size,
-                length,
-                length
-            )
-            enemy.rect = rect
-            pygame.draw.circle(self.screen, (255,0,0), (enemy.rect.x+length/2, enemy.rect.y+length/2), length/2 - length*self.player.speed/2)
 
         pygame.display.update()
     
@@ -583,165 +502,3 @@ class Game:
                 dy = 0
         
         return dx, dy
-
-#####################
-
-#################
-# Menus
-#################
-
-#####################
-
-# Button class
-class Button(pygame.sprite.Sprite):
-
-    # Initialise object
-    def __init__(self, font, width, height, text, colour, text_colour, border_colour):
-
-        super().__init__()
-        self.font = font
-        self.rect = pygame.Rect(
-            0,
-            0,
-            width,
-            height
-        )
-        self.text = text
-        self.colour = colour
-        self.text_colour = text_colour
-        self.border_colour = border_colour
-    
-    # Render method
-    def render(self, screen, pos):
-
-        # Render text
-        text = self.font.render(self.text, True, self.text_colour)
-
-        # Create inflated rect to have a border to the button
-        border_rect = text.get_rect(center=pos).inflate(40,40)
-
-        # Create the inner rect in which the text will be rendered
-        text_rect = text.get_rect(center=pos)
-
-        # Create own rect that has 20 pixels of padding in x and y
-        self.rect = text.get_rect(center=pos).inflate(20, 20)
-        
-        # Draw the rect and the text
-        pygame.draw.rect(screen, self.border_colour, border_rect) # Draw border rect
-        pygame.draw.rect(screen, self.colour, self.rect) # Draw inner rect
-        screen.blit(text, text_rect) # Draw text, but in the correct position instead of the top left of the rect
-
-#####################
-
-# Label class
-class Label(pygame.sprite.Sprite):
-
-    # Initialise object
-    def __init__(self, font, text, text_colour):
-
-        super().__init__()
-        self.font = font
-        self.text = text
-        self.text_colour = text_colour
-
-    # Render method
-    def render(self, screen, pos):
-        
-        # Render the text and center its rect before drawing on the screen
-        text = self.font.render(self.text, True, self.text_colour)
-        text_rect = text.get_rect(center=pos)
-        screen.blit(text, text_rect)
-
-#####################
-
-# Menu class
-class Menu:
-
-    # Initialise object
-    def __init__(self):
-        pygame.init()
-        
-        info = pygame.display.Info()
-        width = info.current_w
-        height = info.current_h
-        self.screen_dimensions = (width, height)
-        self.screen = pygame.display.set_mode(self.screen_dimensions, pygame.FULLSCREEN|pygame.SCALED)
-        
-        # Game fonts
-        self.title_font = pygame.font.Font("fonts/Pixelated_Elegance.ttf",80)
-        self.element_font = pygame.font.Font("fonts/Pixelated_Elegance.ttf",50)
-
-    # Main menu method
-    def main_menu(self):
-
-        # Player choice options
-        choices = {
-            "quit": False,
-            "start": False
-        }
-
-        # Title
-        title = Label(self.title_font, "Sonar's Edge", (255,255,255))
-
-        # Start
-        start = Button(self.element_font, 100, 50, "Start", (106,100,150), (255,255,255), (30,29,44))
-
-        # Quit button
-        quit = Button(self.element_font, 100, 50, "Quit", (106,100,150), (255,255,255), (30,29,44))
-
-        # Funny image
-        icon = pygame.image.load("icon.png").convert()
-        icon = pygame.transform.scale(icon, (200,200))
-
-        # Run while game is running
-        running = True
-        while running:
-
-            self.screen.fill((52,49,74))
-
-            title.render(self.screen, (self.screen_dimensions[0]//2, self.screen_dimensions[1]//5))
-            start.render(self.screen, (self.screen_dimensions[0]//2, self.screen_dimensions[1]*3//5))
-            quit.render(self.screen, (self.screen_dimensions[0]//2, self.screen_dimensions[1]*4//5))
-            self.screen.blit(icon, (50,50))
-
-            pygame.display.flip()
-
-            # Check events
-            for event in pygame.event.get():
-                
-                # Quit if window closed
-                if event.type == pygame.QUIT:
-                    running = False
-                    pygame.quit()
-
-                # Quit if quit button pressed
-                if event.type == pygame.MOUSEBUTTONDOWN:
-
-                    # Check if the click happened on the left mouse button
-                    if event.button == 1:
-
-                        # Check if the mouse is collided with the button before quitting
-                        if quit.rect.collidepoint(event.pos):
-                            choices["quit"] = True
-                            running = False
-                            #pygame.quit()
-                        
-                        # Start the game if the player wants to
-                        # Check if the mouse is collided with the button before quitting
-                        if start.rect.collidepoint(event.pos):
-                            choices["start"] = True
-                            running = False
-        
-        # Execute player choices
-        if choices["quit"]:
-            pygame.quit()
-        elif choices["start"]:
-            maze1 = Maze()
-            #maze1.load_maze("maze3")
-            maze1.generate_maze("maze3", 20, 20)
-            game1 = Game(self.screen, maze1, 50)
-            game1.run(0.05)
-
-# Main menu
-
-#class Main_Menu
